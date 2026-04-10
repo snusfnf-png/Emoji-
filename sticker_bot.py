@@ -376,125 +376,131 @@ def generate_plate_image(country: str, chars: str, region: str, region_name: str
         _ru_flag(draw, fx, fy, fw=fw, fh=fh)
 
     elif country == "UA":
-        # Украинский номер: белый фон, синяя полоса слева с флагом UA вверху и "UA" внизу,
-        # справа — регион + номер в формате "АА 1234 ВВ"
-        pw, ph = 420, 120
+        # Украинский номер: синяя полоса (флаг + UA снизу), белое поле с номером
+        # Реальный вид: [🇺🇦][  АА 1234 ВВ  ]
+        pw, ph = 430, 120
         px, py = cx - pw // 2, cy - ph // 2
-        # Тень
         draw.rounded_rectangle([px+4, py+4, px+pw+4, py+ph+4], radius=8, fill="#b0b0b0")
-        # Белый корпус
         draw.rounded_rectangle([px, py, px+pw, py+ph], radius=8, fill="white",
                                 outline="#111111", width=4)
-        # Синяя полоса слева
-        strip_w = 58
-        draw.rounded_rectangle([px, py, px+strip_w, py+ph], radius=8, fill="#003DA5")
-        # Перекрыть правый скруглённый край полосы прямоугольником
-        draw.rectangle([px+strip_w//2, py+4, px+strip_w, py+ph-4], fill="#003DA5")
-        # Вертикальная черта
+        # Синяя полоса слева (только скруглённый левый край + прямой правый)
+        strip_w = 56
+        # Рисуем синий прямоугольник с закруглением только слева
+        draw.rounded_rectangle([px, py, px+strip_w+8, py+ph], radius=8, fill="#003DA5")
+        draw.rectangle([px+strip_w//2, py+2, px+strip_w, py+ph-2], fill="#003DA5")
+        # Вертикальный разделитель
         draw.line([(px+strip_w, py+4), (px+strip_w, py+ph-4)], fill="#111111", width=3)
-        # Флаг Украины внутри синей полосы (верхняя часть)
-        flag_w, flag_h = 34, 22
-        flag_x = px + (strip_w - flag_w) // 2
-        flag_y = py + 14
-        _ua_flag(draw, flag_x, flag_y, fw=flag_w, fh=flag_h)
+        # Флаг Украины (жёлто-голубой) в верхней части полосы
+        fw, fh = 36, 22
+        fx = px + (strip_w - fw) // 2
+        fy = py + 16
+        # Верхняя половина — синяя (небо)
+        draw.rectangle([fx, fy, fx+fw, fy+fh//2], fill="#005BBB")
+        # Нижняя половина — жёлтая (пшеница)
+        draw.rectangle([fx, fy+fh//2, fx+fw, fy+fh], fill="#FFD500")
         # Надпись "UA" внизу синей полосы
-        fnt_ua = ImageFont.truetype(FONT_BOLD, 16)
-        draw.text((px + strip_w//2, py + ph - 18), "UA", fill="white", font=fnt_ua, anchor="mm")
-        # Основной текст: разбиваем chars — первые 2 буквы, 4 цифры, 2 буквы
-        # Формат UA: АА 1234 ВВ (регион уже включён в chars, или separate)
-        # chars приходит как "АА1234ВВ" → форматируем с пробелами
-        c = chars.replace(" ","")
-        if len(c) == 8:
-            body = f"{c[:2]} {c[2:6]} {c[6:]}"
-        elif len(c) == 4 and region:
-            body = f"{region} {c}"
+        fnt_ua = ImageFont.truetype(FONT_BOLD, 15)
+        draw.text((px + strip_w//2, py + ph - 16), "UA", fill="white", font=fnt_ua, anchor="mm")
+        # Основной номер — формат "АА 1234 ВВ"
+        # chars = введённый номер (напр "1242 АВ"), region = код региона (напр "AA")
+        c = chars.strip().upper()
+        # Убираем пробелы для анализа длины
+        c_nospace = c.replace(" ", "")
+        if len(c_nospace) == 6:
+            # "ААЦЦЦЦ" → "АА 1234" (2 буквы + 4 цифры) — старый формат
+            body = f"{c_nospace[:2]} {c_nospace[2:]}"
+        elif len(c_nospace) == 4:
+            # только цифры/буквы, добавляем регион
+            body = f"{region} {c}" if region else c
         else:
-            body = chars
-        fnt_pl = ImageFont.truetype(FONT_BOLD, 62)
+            body = c
+        fnt_pl = ImageFont.truetype(FONT_BOLD, 60)
         content_cx = px + strip_w + (pw - strip_w) // 2
         draw.text((content_cx, cy), body, fill="#111111", font=fnt_pl, anchor="mm")
 
     elif country == "BY":
-        # Белорусский номер: белый фон, левая полоса с настоящим флагом BY + надпись "BY",
-        # номер в формате "1234 АХ-3"
-        pw, ph = 440, 120
+        # Белорусский номер: [флаг маленький сверху-слева + BY под ним] [номер 1234 АХ-3]
+        # Флаг и BY занимают компактную левую зону БЕЗ разделителя от основного текста
+        pw, ph = 460, 120
         px, py = cx - pw // 2, cy - ph // 2
-        # Тень
         draw.rounded_rectangle([px+4, py+4, px+pw+4, py+ph+4], radius=8, fill="#b0b0b0")
-        # Белый корпус с чёрной рамкой
         draw.rounded_rectangle([px, py, px+pw, py+ph], radius=8, fill="white",
                                 outline="#111111", width=5)
-        # Левая полоса с флагом BY
-        strip_w = 62
-        # Рисуем настоящий флаг Беларуси: красная (2/3) + зелёная (1/3) полосы
-        flag_x = px + 5
-        flag_y = py + 8
-        flag_w2 = strip_w - 12
-        flag_h2 = ph - 16
-        red_h = int(flag_h2 * 0.67)
-        grn_h = flag_h2 - red_h
-        draw.rectangle([flag_x, flag_y, flag_x+flag_w2, flag_y+red_h], fill="#CF101A")
-        draw.rectangle([flag_x, flag_y+red_h, flag_x+flag_w2, flag_y+flag_h2], fill="#009A44")
-        # Белый узор (орнамент) на красной полосе — упрощённая имитация
-        orn_w = 6
-        for yi in range(flag_y+4, flag_y+red_h-4, 8):
-            draw.rectangle([flag_x+2, yi, flag_x+orn_w, yi+4], fill="white")
+        # Компактный флаг Беларуси в левом верхнем углу
+        # Флаг: вертикальный (как на номере) — красная полоса 2/3, зелёная 1/3
+        fw2 = 38   # ширина флага
+        fh2 = 56   # высота флага
+        fx2 = px + 10
+        fy2 = py + 10
+        red_h2 = int(fh2 * 0.67)
+        grn_h2 = fh2 - red_h2
+        draw.rectangle([fx2, fy2, fx2+fw2, fy2+red_h2], fill="#CF101A")
+        draw.rectangle([fx2, fy2+red_h2, fx2+fw2, fy2+fh2], fill="#009A44")
+        # Орнамент: тонкая белая вертикальная полоска у левого края
+        draw.rectangle([fx2, fy2, fx2+5, fy2+fh2], fill="white")
+        # Точечный орнамент в белой полоске
+        for yi in range(fy2+3, fy2+fh2-3, 7):
+            draw.rectangle([fx2+1, yi, fx2+3, yi+3], fill="#CF101A")
         # "BY" под флагом
-        fnt_by = ImageFont.truetype(FONT_BOLD, 13)
-        draw.text((flag_x + flag_w2//2, flag_y + flag_h2 + 9), "BY",
-                  fill="#111111", font=fnt_by, anchor="mm")
-        # Вертикальный разделитель
-        draw.line([(px+strip_w, py+4), (px+strip_w, py+ph-4)], fill="#111111", width=3)
-        # Основной текст — формат: "ЦЦЦЦ СС-Р" (4 цифры, 2 буквы, -регион)
+        fnt_by2 = ImageFont.truetype(FONT_BOLD, 14)
+        draw.text((fx2 + fw2//2, fy2 + fh2 + 10), "BY", fill="#111111", font=fnt_by2, anchor="mm")
+        # Основной текст — "1234 АХ-3" — занимает всё правое пространство без разделителя
+        # Отступ после флага
+        text_left = fx2 + fw2 + 14
         c = chars.replace(" ", "")
         if len(c) >= 6:
             body = f"{c[:4]} {c[4:6]}-{region}"
         else:
             body = f"{chars}-{region}"
-        fnt_pl = ImageFont.truetype(FONT_BOLD, 58)
-        content_cx = px + strip_w + (pw - strip_w) // 2
+        fnt_pl = ImageFont.truetype(FONT_BOLD, 60)
+        content_cx = text_left + (px + pw - 8 - text_left) // 2
         draw.text((content_cx, cy), body, fill="#111111", font=fnt_pl, anchor="mm")
 
     elif country == "KZ":
-        # Казахстанский номер: белый фон, голубая полоса слева с флагом KZ и надписью "KZ",
-        # центр — номер "ЦЦЦ ЛЛЛ", справа — код региона (2 цифры)
-        pw, ph = 460, 120
+        import math as _math
+        # Казахстанский номер: голубая полоса слева (флаг + KZ, БЕЗ разделителя),
+        # центр — "ЦЦЦ ЛЛЛ", правая панель с кодом региона (С разделителем)
+        pw, ph = 480, 120
         px, py = cx - pw // 2, cy - ph // 2
-        # Тень
         draw.rounded_rectangle([px+4, py+4, px+pw+4, py+ph+4], radius=8, fill="#b0b0b0")
-        # Белый корпус
         draw.rounded_rectangle([px, py, px+pw, py+ph], radius=8, fill="white",
                                 outline="#111111", width=4)
-        # Голубая полоса слева
-        strip_w = 62
-        draw.rounded_rectangle([px, py, px+strip_w, py+ph], radius=8, fill="#00AFCA")
-        draw.rectangle([px+strip_w//2, py+4, px+strip_w, py+ph-4], fill="#00AFCA")
-        draw.line([(px+strip_w, py+4), (px+strip_w, py+ph-4)], fill="#111111", width=3)
-        # Флаг Казахстана в полосе — голубой прямоугольник с солнцем
+        # Голубая полоса слева — закруглена только слева
+        strip_w = 64
+        draw.rounded_rectangle([px, py, px+strip_w+8, py+ph], radius=8, fill="#00AFCA")
+        draw.rectangle([px+strip_w//2, py+2, px+strip_w, py+ph-2], fill="#00AFCA")
+        # Флаг Казахстана внутри полосы — голубой фон + солнце + орёл
+        # Флаг как прямоугольник внутри полосы
         fkx = px + 8
         fky = py + 12
-        fkw, fkh = strip_w - 18, 28
-        draw.rectangle([fkx, fky, fkx+fkw, fky+fkh], fill="#00AFCA", outline=None)
-        # Солнце — жёлтый круг с лучами
-        sun_cx = fkx + fkw // 2
-        sun_cy = fky + fkh // 2
-        draw.ellipse([sun_cx-6, sun_cy-6, sun_cx+6, sun_cy+6], fill="#FFD700")
-        for angle_deg in range(0, 360, 45):
-            import math
-            a = math.radians(angle_deg)
-            x1 = int(sun_cx + 8*math.cos(a))
-            y1 = int(sun_cy + 8*math.sin(a))
-            x2 = int(sun_cx + 12*math.cos(a))
-            y2 = int(sun_cy + 12*math.sin(a))
-            draw.line([(x1,y1),(x2,y2)], fill="#FFD700", width=2)
-        # Надпись "KZ" под флагом
+        fkw = strip_w - 18
+        fkh = 46
+        draw.rectangle([fkx, fky, fkx+fkw, fky+fkh], fill="#00AFCA")
+        # Солнце с 32 лучами вверху-посередине флага
+        s_cx = fkx + fkw // 2
+        s_cy = fky + 14
+        # Лучи
+        for ai in range(0, 360, 22):
+            a = _math.radians(ai)
+            draw.line([(int(s_cx+7*_math.cos(a)), int(s_cy+7*_math.sin(a))),
+                       (int(s_cx+11*_math.cos(a)), int(s_cy+11*_math.sin(a)))],
+                      fill="#FFD700", width=1)
+        # Круг солнца
+        draw.ellipse([s_cx-5, s_cy-5, s_cx+5, s_cy+5], fill="#FFD700")
+        # Упрощённый силуэт орла под солнцем
+        e_cx = fkx + fkw // 2
+        e_cy = fky + 34
+        draw.arc([e_cx-10, e_cy-6, e_cx+10, e_cy+6], start=200, end=340, fill="#FFD700", width=2)
+        draw.line([(e_cx-10, e_cy), (e_cx-16, e_cy-8)], fill="#FFD700", width=2)
+        draw.line([(e_cx+10, e_cy), (e_cx+16, e_cy-8)], fill="#FFD700", width=2)
+        # "KZ" под флагом
         fnt_kz = ImageFont.truetype(FONT_BOLD, 14)
-        draw.text((px + strip_w//2, py + ph - 18), "KZ", fill="white", font=fnt_kz, anchor="mm")
-        # Правая панель с кодом региона
-        right_w = 52
+        draw.text((fkx + fkw//2, fky + fkh + 10), "KZ", fill="white", font=fnt_kz, anchor="mm")
+        # Правая панель с кодом региона — ТОЛЬКО здесь разделитель
+        right_w = 54
         rdx = px + pw - right_w
         draw.line([(rdx, py+4), (rdx, py+ph-4)], fill="#111111", width=3)
-        fnt_reg = ImageFont.truetype(FONT_BOLD, 32)
+        fnt_reg = ImageFont.truetype(FONT_BOLD, 34)
         draw.text((rdx + right_w//2, cy), region, fill="#111111", font=fnt_reg, anchor="mm")
         # Основной текст — "ЦЦЦ ЛЛЛ"
         c = chars.replace(" ", "")
@@ -502,7 +508,7 @@ def generate_plate_image(country: str, chars: str, region: str, region_name: str
             body = f"{c[:3]} {c[3:]}"
         else:
             body = chars
-        fnt_pl = ImageFont.truetype(FONT_BOLD, 62)
+        fnt_pl = ImageFont.truetype(FONT_BOLD, 64)
         content_cx = px + strip_w + (rdx - px - strip_w) // 2
         draw.text((content_cx, cy), body, fill="#111111", font=fnt_pl, anchor="mm")
 
@@ -1735,6 +1741,9 @@ def main() -> None:
                     filters.ANIMATION | filters.Document.ALL,
                     receive_sticker_file,
                 ),
+                # Если пришёл текст во время ADDING_STICKER — значит альбом собран
+                # и пользователь отвечает эмодзи на запрос из _album_flush
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_emoji_for_new),
             ],
             WAITING_EMOJI: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_emoji_for_new),
