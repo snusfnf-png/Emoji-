@@ -2,3 +2,4 @@ python-telegram-bot==21.3
 Pillow>=10.0.0
 imageio-ffmpeg
 psycopg2-binary
+python-telegram-bot[job-queue]
