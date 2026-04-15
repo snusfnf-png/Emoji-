@@ -25,12 +25,14 @@ from telegram.constants import StickerFormat, StickerType
 from telegram.error import TelegramError
 from telegram.ext import (
     Application,
+    ApplicationHandlerStop,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     ConversationHandler,
     MessageHandler,
     PreCheckoutQueryHandler,
+    TypeHandler,
     filters,
 )
 
@@ -399,7 +401,7 @@ class DB:
                     SELECT id, send_at, message_text, photo_file_id, caption
                     FROM scheduled_broadcasts
                     WHERE done = FALSE AND send_at <= %s
-                """, (datetime.datetime.now(),))
+                """, (datetime.datetime.utcnow(),))
                 return cur.fetchall()
         except Exception as e:
             logger.error("DB get_pending_broadcasts error: %s", e)
@@ -1733,7 +1735,8 @@ async def adm_schedule_receive_time(update: Update, context: ContextTypes.DEFAUL
         send_at = datetime.datetime.strptime(text, "%d.%m.%Y %H:%M")
     except ValueError:
         await update.message.reply_text(
-            "❌ Неверный формат. Введи дату и время как: <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>",
+            "❌ Неверный формат. Введи дату и время как: <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>\n"
+            "⚠️ Время указывай по UTC (московское − 3 ч.)",
             parse_mode="HTML",
         )
         return ADMIN_SCHEDULED_TIME
@@ -4337,7 +4340,7 @@ def main() -> None:
     # Инициализируем БД (создаём таблицу если нет)
     DB.init()
 
-    async def post_init_builder(application):
+    async def post_init(application):
         try:
             await application.bot.set_my_commands([
                 ("start",  "👤 Я"),
@@ -4351,10 +4354,9 @@ def main() -> None:
     app = (
         Application.builder()
         .token(BOT_TOKEN)
-        .post_init(post_init_builder)
+        .post_init(post_init)
         .build()
     )
-
     conv = ConversationHandler(
         entry_points=[
             CommandHandler("start",  start),
@@ -4551,20 +4553,26 @@ def main() -> None:
 
     app.add_handler(conv)
 
-    # Обработчик тех. перерыва — перехватывает ВСЕ команды кроме /admin
+    # Обработчик тех. перерыва — перехватывает ВСЕ апдейты кроме /admin
     async def _maintenance_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if is_maintenance() and not is_admin(update):
+        if not is_maintenance():
+            return
+        if is_admin(update):
+            return
+        # Проверяем что это не /admin команда
+        if update.message and update.message.text and update.message.text.startswith("/admin"):
+            return
+        if update.callback_query:
+            await update.callback_query.answer(
+                "🔧 Технические работы. Попробуйте позже.", show_alert=True
+            )
+        elif update.effective_message:
             await update.effective_message.reply_text(
                 "🔧 В данный момент проводятся технические работы. Пожалуйста, попробуйте позже."
             )
-            return
-        # Передаём управление дальше (этот handler не прерывает цепочку)
+        raise ApplicationHandlerStop  # останавливаем цепочку обработчиков
 
-    from telegram.ext import filters as _f
-    app.add_handler(MessageHandler(
-        _f.COMMAND & ~_f.Regex(r"^/admin"),
-        _maintenance_check,
-    ), group=-1)  # group=-1 — выполняется ПЕРВЫМ
+    app.add_handler(TypeHandler(Update, _maintenance_check), group=-1)
 
     app.add_handler(CommandHandler("start",  start))
     app.add_handler(CommandHandler("menu",   menu_command))
@@ -4580,7 +4588,7 @@ def main() -> None:
     if app.job_queue is not None:
         app.job_queue.run_repeating(check_scheduled_broadcasts, interval=60, first=10)
     else:
-        logger.warning("JobQueue недоступен. Установите: pip install 'python-telegram-bot[job-queue]'")
+        logger.warning("JobQueue недоступен — установите: pip install 'python-telegram-bot[job-queue]'")
 
     logger.info("Бот запущен ✅")
     app.run_polling(drop_pending_updates=True)
